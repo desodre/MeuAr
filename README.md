@@ -1,62 +1,88 @@
-This is a Kotlin Multiplatform project targeting Android, iOS.
+# Meu Ar
 
-## Tela inicial
+Aplicativo para Android e iOS que encontra a estação de monitoramento da
+qualidade do ar mais próxima da sua localização e apresenta a leitura disponível
+nela.
 
-O app pede acesso à localização enquanto está em uso, consulta
-`https://monitorar-backend.mma.gov.br/v1/estacao/todas` e escolhe a estação
-geograficamente mais próxima pelas coordenadas da estação e pela fórmula de
-Haversine. Depois, consulta `/v1/estacao/por-ids?ids=<id>` para obter o detalhe
-da estação selecionada. A tela segue o [design Meu Ar no Figma](https://www.figma.com/design/HUnkhWQY0z7h91a773T6dQ/MeuAr?node-id=0-1):
-paleta clara e escura, mapa em tons neutros e cartões para os estados de consulta.
-Enquanto a localização ou as estações carregam, aparece o mapa esquemático
-do design. Quando há usuário e estação, o mapa geográfico mostra ruas reais,
-os dois marcadores e a linha entre eles. É possível arrastar, ampliar por
-gesto e centralizar novamente. A distância exibida é em linha reta, e o IQAr é uma medição
-**na estação**.
+A interface segue o [design do Meu Ar no Figma](https://www.figma.com/design/HUnkhWQY0z7h91a773T6dQ/MeuAr?node-id=0-1),
+com temas claro e escuro, mapa em tons neutros e estados claros para carregamento
+e falhas.
 
-O campo `semInfoMaisDeTresDias` sinaliza dados antigos. A data da medição é
-mostrada sem converter fuso horário, pois o endpoint não fornece um offset.
-Se o serviço ou a localização estiverem indisponíveis, a tela mostra o estado
-correspondente. Permissão negada oferece acesso às configurações; falha de
-conexão e ausência de medição oferecem “Tentar novamente”. Android e iOS
-precisam de conexão com a internet.
+## Como funciona
 
-Permissões: `INTERNET`, `ACCESS_COARSE_LOCATION` e `ACCESS_FINE_LOCATION` no
-Android; `NSLocationWhenInUseUsageDescription` no iOS. O usuário pode conceder
-localização aproximada no Android.
-O mapa geográfico usa Leaflet 1.9.4 e tiles do OpenStreetMap, com atribuição
-visível. Não precisa de chave de API. Precisa de acesso a `unpkg.com` ou
-`cdn.jsdelivr.net` para carregar o Leaflet e a `tile.openstreetmap.org` para
-mostrar as ruas; o mapa apresenta “Tentar novamente” se esses recursos
-falharem. No Android, o HTML usa uma origem HTTPS no WebView, cache HTTP padrão
-e um User-Agent identificando Meu Ar.
+1. O app solicita acesso à localização durante o uso.
+2. Consulta as estações no MonitorAr e calcula a distância até cada uma pela
+   **fórmula de Haversine**, usando as coordenadas da estação.
+3. Busca os detalhes da estação mais próxima e mostra sua medição, classificação,
+   poluente, horário e fonte, quando disponíveis.
+4. Marca no mapa o usuário e a estação, com uma linha entre os pontos. A
+   distância em linha reta aparece no cartão da estação.
 
-* [/iosApp](./iosApp/iosApp) contains an iOS application. Even if you’re sharing your UI with Compose Multiplatform,
-  you need this entry point for your iOS app. This is also where you should add SwiftUI code for your project.
+| Endpoint do MonitorAr | Uso |
+| --- | --- |
+| [`/v1/estacao/todas`](https://monitorar-backend.mma.gov.br/v1/estacao/todas) | Descobrir as estações e suas coordenadas. |
+| `/v1/estacao/por-ids?ids=<id>` | Consultar a estação selecionada. |
 
-* [/shared](./shared/src) is for code that will be shared across your Compose Multiplatform applications.
-  It contains several subfolders:
-  - [commonMain](./shared/src/commonMain/kotlin) is for code that’s common for all targets.
-  - Other folders are for Kotlin code that will be compiled for only the platform indicated in the folder name.
-    For example, if you want to use Apple’s CoreCrypto for the iOS part of your Kotlin app,
-    the [iosMain](./shared/src/iosMain/kotlin) folder would be the right place for such calls.
-    Similarly, if you want to edit the Desktop (JVM) specific part, the [jvmMain](./shared/src/jvmMain/kotlin)
-    folder is the appropriate location.
+O mapa geográfico usa Leaflet e mapas do OpenStreetMap. Enquanto a localização
+ou as estações carregam, a tela apresenta o mapa esquemático do design. Quando
+os dados chegam, é possível mover, ampliar e recentralizar o mapa.
 
-### Running the apps
+## Estados e limites dos dados
 
-Use the run configurations provided by the run widget in your IDE's toolbar. You can also use these commands and options:
+A tela distingue leitura recente, leitura com mais de três dias, estação sem
+medição, falha de conexão e falta de permissão de localização. Os estados de
+falha oferecem uma ação adequada, como **Tentar novamente** ou
+**Abrir configurações**.
 
-- Android app: `./gradlew :androidApp:assembleDebug`
-- iOS app: open the [/iosApp](./iosApp) directory in Xcode and run it from there.
+- A leitura de qualidade do ar pertence **à estação**, não ao endereço exato do usuário.
+- A distância exibida é geográfica, em linha reta; não representa um trajeto.
+- O campo `semInfoMaisDeTresDias` identifica dados antigos. O horário da medição
+  é exibido sem conversão de fuso, pois a resposta da API não informa um
+  deslocamento de horário.
 
-### Running tests
+## Executar o projeto
 
-Use the run button in your IDE's editor gutter, or run tests using Gradle tasks:
+O projeto usa Kotlin Multiplatform e Compose Multiplatform. Para o Android, é
+necessário um ambiente de desenvolvimento com o SDK Android. Para o iOS, use
+macOS com Xcode. O app precisa de internet e de permissão de localização no
+dispositivo.
 
-- Android tests: `./gradlew :shared:testAndroidHostTest`
-- iOS tests: `./gradlew :shared:iosSimulatorArm64Test`
+### Android
 
----
+Abra o projeto no Android Studio e execute a configuração do `androidApp`, ou
+gere um APK de debug:
 
-Learn more about [Kotlin Multiplatform](https://www.jetbrains.com/help/kotlin-multiplatform-dev/get-started.html)…
+```bash
+./gradlew :androidApp:assembleDebug
+```
+
+O [manifesto Android](androidApp/src/main/AndroidManifest.xml) já declara
+`INTERNET`, `ACCESS_COARSE_LOCATION` e `ACCESS_FINE_LOCATION`. O usuário pode
+conceder localização aproximada.
+
+### iOS
+
+Abra [`iosApp/iosApp.xcodeproj`](iosApp/iosApp.xcodeproj) no Xcode e execute o
+app em um simulador ou dispositivo. A descrição da permissão de localização
+está em [`Info.plist`](iosApp/iosApp/Info.plist).
+
+### Testes
+
+```bash
+./gradlew :shared:testAndroidHostTest
+```
+
+No macOS, para executar os testes no simulador iOS:
+
+```bash
+./gradlew :shared:iosSimulatorArm64Test
+```
+
+## Estrutura
+
+| Diretório | Responsabilidade |
+| --- | --- |
+| [`shared/src/commonMain`](shared/src/commonMain) | Interface compartilhada, modelos, seleção da estação e cálculo de distância. |
+| [`shared/src/androidMain`](shared/src/androidMain) | API, localização e mapa no Android. |
+| [`shared/src/iosMain`](shared/src/iosMain) | API, localização e mapa no iOS. |
+| [`androidApp`](androidApp) e [`iosApp`](iosApp) | Entradas e configurações de cada plataforma. |
