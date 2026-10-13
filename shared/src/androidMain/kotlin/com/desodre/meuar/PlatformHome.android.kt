@@ -2,12 +2,15 @@ package com.desodre.meuar
 
 import android.Manifest
 import android.content.Context
+import android.content.Intent
 import android.content.pm.PackageManager
 import android.location.Location
 import android.location.LocationListener
 import android.location.LocationManager
 import android.os.Handler
 import android.os.Looper
+import android.provider.Settings
+import android.net.Uri
 import android.webkit.WebView
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -30,6 +33,10 @@ import kotlin.coroutines.resumeWithException
 import kotlin.coroutines.suspendCoroutine
 
 private const val baseUrl = "https://monitorar-backend.mma.gov.br/v1/estacao"
+private const val mapBaseUrl = "https://appassets.androidplatform.net/"
+
+actual val locationPermissionInstructions: String =
+    "Configurações → Apps → Meu Ar → Permissões → Localização → Permitir durante o uso."
 
 actual suspend fun loadAllStations(): List<Station> = fetchJson("$baseUrl/todas") { body ->
     val array = JSONArray(body)
@@ -116,6 +123,18 @@ actual fun rememberUserLocation(retryKey: Int): UserLocationState {
     return state
 }
 
+@Composable
+actual fun locationSettingsAction(): () -> Unit {
+    val context = LocalContext.current
+    return {
+        val intent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+            data = Uri.fromParts("package", context.packageName, null)
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        }
+        context.startActivity(intent)
+    }
+}
+
 @Suppress("DEPRECATION")
 private fun requestPosition(context: Context, onResult: (UserLocationState) -> Unit) {
     try {
@@ -154,17 +173,33 @@ private fun requestPosition(context: Context, onResult: (UserLocationState) -> U
 }
 
 @Composable
-actual fun StationMap(point: GeoPoint, modifier: Modifier) {
-    val url = remember(point) { stationMapUrl(point) }
-    key(point) {
+actual fun StationMap(
+    user: GeoPoint,
+    station: GeoPoint,
+    stationName: String,
+    markerKind: MapMarkerKind,
+    dark: Boolean,
+    modifier: Modifier,
+) {
+    val html = remember(user, station, stationName, markerKind, dark) {
+        stationMapHtml(user, station, stationName, markerKind, dark)
+    }
+    key(user, station, stationName, markerKind, dark) {
         AndroidView(
             factory = { context -> WebView(context).apply {
                 settings.javaScriptEnabled = true
                 settings.domStorageEnabled = true
-                loadUrl(url)
+                settings.allowFileAccess = false
+                settings.allowContentAccess = false
+                settings.userAgentString = "${settings.userAgentString} MeuAr/1.0 (com.desodre.meuar)"
+                setBackgroundColor(if (dark) android.graphics.Color.rgb(42, 42, 42)
+                    else android.graphics.Color.rgb(238, 238, 238))
+                // A null base URL gives the document an opaque origin. Use HTTPS
+                // so map resources load under a normal WebView security origin.
+                loadDataWithBaseURL(mapBaseUrl, html, "text/html", null, mapBaseUrl)
             } },
             modifier = modifier,
-            onRelease = { it.destroy() },
+            onRelease = { it.stopLoading(); it.destroy() },
         )
     }
 }

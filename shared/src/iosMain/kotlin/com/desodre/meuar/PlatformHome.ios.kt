@@ -28,16 +28,20 @@ import platform.Foundation.NSHTTPURLResponse
 import platform.Foundation.NSJSONSerialization
 import platform.Foundation.NSNumber
 import platform.Foundation.NSURL
-import platform.Foundation.NSURLRequest
 import platform.Foundation.NSURLSession
 import platform.darwin.NSObject
 import platform.WebKit.WKWebView
 import platform.WebKit.WKWebViewConfiguration
+import platform.UIKit.UIApplication
+import platform.UIKit.UIApplicationOpenSettingsURLString
 import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
 import kotlin.coroutines.suspendCoroutine
 
 private const val baseUrl = "https://monitorar-backend.mma.gov.br/v1/estacao"
+
+actual val locationPermissionInstructions: String =
+    "Ajustes → Meu Ar → Localização → Durante o uso do app."
 
 actual suspend fun loadAllStations(): List<Station> {
     val parsed = fetchJson("$baseUrl/todas")
@@ -165,15 +169,34 @@ actual fun rememberUserLocation(retryKey: Int): UserLocationState {
     return controller.state
 }
 
+@Composable
+actual fun locationSettingsAction(): () -> Unit = {
+    NSURL(string = UIApplicationOpenSettingsURLString)?.let {
+        UIApplication.sharedApplication.openURL(it)
+    }
+}
+
 @OptIn(ExperimentalForeignApi::class)
 @Composable
-actual fun StationMap(point: GeoPoint, modifier: Modifier) {
-    val url = remember(point) { stationMapUrl(point) }
-    key(point) {
+actual fun StationMap(
+    user: GeoPoint,
+    station: GeoPoint,
+    stationName: String,
+    markerKind: MapMarkerKind,
+    dark: Boolean,
+    modifier: Modifier,
+) {
+    val html = remember(user, station, stationName, markerKind, dark) {
+        stationMapHtml(user, station, stationName, markerKind, dark)
+    }
+    key(user, station, stationName, markerKind, dark) {
         UIKitView(
             factory = {
-                WKWebView(frame = CGRectZero.readValue(), configuration = WKWebViewConfiguration()).apply {
-                    loadRequest(NSURLRequest.requestWithURL(NSURL(string = url)!!))
+                val configuration = WKWebViewConfiguration().apply {
+                    applicationNameForUserAgent = "MeuAr/1.0"
+                }
+                WKWebView(frame = CGRectZero.readValue(), configuration = configuration).apply {
+                    loadHTMLString(html, baseURL = null)
                 }
             },
             modifier = modifier,
